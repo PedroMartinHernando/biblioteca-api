@@ -4,7 +4,9 @@ import { CreateAuthorDto } from './dto/create-author.dto';
 
 @Controller('authors')
 export class AuthorsController {
-    constructor( private authorsService: AuthorsService) {}
+    constructor( 
+        private authorsService: AuthorsService
+    ) {}
 
     @Post()
     create(@Body() createAuthorDto: CreateAuthorDto){
