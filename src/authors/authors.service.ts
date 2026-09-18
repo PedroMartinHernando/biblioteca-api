@@ -6,7 +6,9 @@ import { CreateAuthorDto } from './dto/create-author.dto';
 
 @Injectable()
 export class AuthorsService {
-    constructor( @InjectRepository(Author) private authorsRepository: Repository<Author>) {}
+    constructor( 
+        @InjectRepository(Author) private authorsRepository: Repository<Author>
+    ) {}
 
     async create(createAuthorDto: CreateAuthorDto): Promise <Author> {
         const author = this.authorsRepository.create({name: createAuthorDto.name});
