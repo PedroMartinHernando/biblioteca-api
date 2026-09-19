@@ -25,6 +25,8 @@ export class BooksService {
     }
 
     async findAll(): Promise<Book[]> {
-        return this.booksRepository.find();
+        return this.booksRepository.find({
+            relations: ['author', 'genres']
+        });
     }
 }
