@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsNotEmpty, IsString } from "class-validator";
+import { ArrayUnique, IsArray, IsInt, IsNotEmpty, IsString } from "class-validator";
 
 export class CreateBookDto {
     @IsNotEmpty()
@@ -9,5 +9,6 @@ export class CreateBookDto {
     authorId: number;
 
     @IsArray()
+    @ArrayUnique()
     genreIds: number[];
 }
