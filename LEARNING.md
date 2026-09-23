@@ -85,7 +85,7 @@
   por la tabla intermedia para llegar a `genre`) y reconstruya el
   resultado como JSON anidado.
 
-## Herramientas y depuración
+## Herramientas y depuración (sesiones 1-3)
 
 - **Problema de encoding en la terminal de Windows**: escribir tildes/ñ
   directamente en un comando `curl -d '...'` desde PowerShell o Git Bash
@@ -101,10 +101,116 @@
   Git, por la misma razón que `dist/` o `*.tsbuildinfo`: es un artefacto
   generado y mutable, no código fuente.
 
+## Sesión 4 — Update y delete: actualización parcial y borrado con relaciones
+
+**`PartialType` para actualizaciones parciales reales**
+
+- Un `PATCH` debería permitir enviar solo los campos que cambian, no
+  obligar a reenviar el recurso completo como en el `create`.
+- `@nestjs/mapped-types` da `PartialType(CreateBookDto)`: genera una nueva
+  clase (`UpdateBookDto`) con los mismos campos y decoradores de
+  validación, pero todos marcados como opcionales automáticamente — sin
+  duplicar el DTO a mano.
+- En el `service`, cada campo se comprueba con `!== undefined` antes de
+  tocarlo, para que un campo ausente en la petición no sobrescriba lo que
+  ya había en la base de datos.
+
+**Actualizar relaciones no es lo mismo que actualizar columnas simples**
+
+- `this.repository.update(id, {...})` solo sirve para columnas normales —
+  no sabe reasignar relaciones (`@ManyToOne`, `@ManyToMany`). Intentar
+  pasarle `authorId` o `genreIds` ahí no funciona.
+- Para tocar relaciones, hay que cargar la entidad completa (con
+  `findOne({ where: { id }, relations: [...] })`), modificar sus campos en
+  memoria (incluyendo asignar objetos de entidad reales a los campos de
+  relación), y guardar con `save()` — este sí sabe gestionar tanto
+  columnas simples como relaciones a la vez.
+
+**Validar relaciones al actualizar: mismos huecos que en `create`**
+
+- `findBy({ id: In([...]) })` no falla si algún ID no existe — solo
+  devuelve menos filas de las pedidas, en silencio. Hay que comparar
+  `resultado.length` contra la cantidad de IDs pedidos para detectar que
+  falta alguno y lanzar `NotFoundException` explícitamente.
+- IDs duplicados en la petición (`genreIds: [4, 4]`) distorsionan esa
+  comparación. Dos formas de resolverlo: deduplicar en el service, o
+  rechazar la petición desde el propio DTO con `@ArrayUnique()` de
+  `class-validator` — más honesto, porque comunica al cliente que su
+  petición estaba mal formada en vez de "arreglarla" en silencio.
+
+**"Asumir" vs "confirmar" el resultado de un `update`**
+
+- Tras `this.repository.update(id, {...})`, devolver el objeto que se
+  cargó *antes* del `update` significa devolver datos desactualizados —
+  el cambio se guardó en la base de datos, pero la respuesta al cliente
+  muestra el valor viejo.
+- Reconstruir el campo actualizado a mano en el objeto en memoria
+  (`author.name = updateDto.name`) es más barato (una consulta menos) pero
+  es una suposición: asume que el `UPDATE` hizo exactamente lo pedido.
+- Releer con una segunda consulta tras el `update` (`findOneBy({ id })`)
+  es más caro pero confirma de verdad el estado real en base de datos, en
+  vez de asumirlo. Para una API cuya exactitud importa, es la opción más
+  robusta, aunque cueste una consulta extra.
+- Optimizar este tipo de detalle (evitar una consulta de más) solo tiene
+  sentido en sistemas con tráfico alto — en un proyecto de este tamaño, la
+  seguridad de "confirmar" vale más que el ahorro de "asumir".
+
+**Reordenar comprobaciones para evitar trabajo innecesario**
+
+- Comprobar primero si un recurso existe (`findOne`) y solo *después*
+  intentar `update()` evita ejecutar un `UPDATE` que sabes de antemano que
+  no va a encontrar nada que actualizar, cuando el `id` no existe.
+- Es una optimización menor en proyectos pequeños, pero un patrón real que
+  importa en sistemas con más volumen de escritura.
+
+**Decisiones de diseño distintas para relaciones "protegidas" al borrar**
+
+Un mismo problema (¿qué pasa si borro algo que otra cosa referencia?)
+puede resolverse de formas distintas y ambas correctas, según el
+contexto de negocio:
+
+- `Author` → `Book` (uno-a-muchos): `remove()` **rechaza** el borrado con
+  `409 Conflict` si el autor tiene libros asociados. Obliga a una decisión
+  explícita (borrar o reasignar los libros primero) antes de perder esa
+  referencia — la opción más segura por defecto.
+- `Book` ↔ `Genre` (muchos-a-muchos): `remove()` permite el borrado sin
+  ninguna comprobación en el código. El libro sobrevive, solo pierde la
+  conexión con ese género — resuelto a nivel de base de datos con
+  `onDelete: 'CASCADE'` (ver más abajo), no con lógica en el service.
+- Quedó anotado como ampliación futura un tercer enfoque (borrado en
+  cascada explícito y opcional para `Author`, no por defecto) para cuando
+  se quiera dar esa flexibilidad sin sacrificar la seguridad del `409`
+  como comportamiento estándar.
+
+**`onDelete` en `@ManyToMany`: cada lado de la relación controla su propia
+clave foránea**
+
+- La tabla intermedia tiene dos claves foráneas: una hacia la entidad
+  propietaria (donde está `@JoinTable()`), otra hacia la entidad inversa.
+  TypeORM NO comparte una única configuración de `onDelete` entre ambas.
+- El `onDelete` que se ponga en el decorador `@ManyToMany` de **Book**
+  controla qué pasa con la tabla intermedia cuando se borra un **libro**.
+- El `onDelete` que se ponga en el decorador `@ManyToMany` de **Genre**
+  (el lado inverso) controla qué pasa cuando se borra un **género**.
+- Poner `onDelete: 'CASCADE'` solo en un lado no cubre el borrado desde el
+  otro lado — hace falta declararlo en el lado correspondiente a la
+  entidad que se quiere poder borrar sin que la relación lo bloquee.
+- Sin `CASCADE` en el lado correcto, SQLite rechaza el `DELETE` a nivel de
+  base de datos (protegiendo la integridad referencial), y como Nest no
+  traduce ese tipo de error de forma amigable por defecto, se propaga como
+  un `500 Internal Server Error` genérico en vez de un mensaje claro —
+  fue exactamente el síntoma que costó depurar en esta sesión.
+- Cambiar `onDelete` en una relación exige regenerar el esquema: con
+  `synchronize: true`, basta con parar el servidor, borrar `db.sqlite`
+  (confirmando con `ls -la` que desapareció de verdad) y arrancar de
+  nuevo — TypeORM lo reconstruye desde las entidades.
+
 ## Pendiente
 
-- Endpoints de actualización/borrado para `Book`, `Author`, `Genre`
-  (patrón ya dominado desde el proyecto de notas).
+- Endpoints específicos `POST`/`DELETE /books/:id/genres/:genreId` para
+  añadir o quitar un género individual sin reemplazar la lista completa.
+- Posible ampliación futura: modo alternativo de borrado en cascada
+  explícito para `Author` (no como comportamiento por defecto).
 - Posible ampliación futura: entidad `Loan` (préstamos) — con quién y
   cuándo se prestó un libro.
 - Proyecto aparte de práctica de SQL puro (sin ORM), para entender mejor
