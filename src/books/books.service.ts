@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Book } from './book.entity';
 import { Repository, In } from 'typeorm';
@@ -69,5 +69,45 @@ export class BooksService {
         if(result.affected === 0){
             throw new NotFoundException(`Book with id ${id} not found`);
         }
+    }
+
+    async addGenre(bookId:number, genreId:number): Promise<Book> {
+        const book = await this.booksRepository.findOne({
+            where:{id: bookId},
+            relations: ['author','genres']
+        });
+        if(!book){
+            throw new NotFoundException(`Book with id ${bookId} not found`);
+        }
+
+        const genre = await this.genreRepository.findOneBy({id: genreId});
+        if(!genre){
+            throw new NotFoundException(`Genre with id ${genreId} not found`);
+        }
+
+        const existingGenre = book.genres.find(g => g.id === genreId);
+        if(existingGenre){
+            throw new ConflictException(`Genre with id ${genreId} already exists for book with id ${bookId}`);
+        }
+        book.genres.push(genre);
+        return this.booksRepository.save(book);
+    }
+
+    async removeGenre(bookId: number, genreId: number): Promise<Book> {
+        const book = await this.booksRepository.findOne({
+            where: { id: bookId },
+            relations: ['genres']
+        });
+        if (!book) {
+            throw new NotFoundException(`Book with id ${bookId} not found`);
+        }
+    
+        const genreIndex = book.genres.findIndex(genre => genre.id === genreId);
+        if (genreIndex === -1) {
+            throw new NotFoundException(`Genre with id ${genreId} not found for book with id ${bookId}`);
+        }
+    
+        book.genres.splice(genreIndex, 1);
+        return this.booksRepository.save(book);
     }
 }

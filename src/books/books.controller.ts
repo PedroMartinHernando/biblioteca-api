@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Patch, HttpCode } from '@nestjs/common';
 import { BooksService } from './books.service';
+import { Book } from './book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 
@@ -29,6 +30,16 @@ export class BooksController {
     @HttpCode(204)
     remove(@Param('id') id: number): Promise<void>{
         return this.booksService.remove(Number(id));
+    }
+
+    @Patch(':id/genres/:genreId')
+    addGenre(@Param('id') id: number, @Param('genreId') genreId: number): Promise<Book> {
+        return this.booksService.addGenre(Number(id), Number(genreId));
+    }
+
+    @Delete(':id/genres/:genreId')
+    removeGenre(@Param('id') id: number, @Param('genreId') genreId: number): Promise<Book> {
+        return this.booksService.removeGenre(Number(id), Number(genreId));
     }
 
 }
