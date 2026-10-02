@@ -205,10 +205,44 @@ clave foránea**
   (confirmando con `ls -la` que desapareció de verdad) y arrancar de
   nuevo — TypeORM lo reconstruye desde las entidades.
 
+## Sesión 5 — Operaciones granulares sobre una relación `@ManyToMany`
+
+**Por qué un endpoint aparte, además del `update` general**
+
+- El `update` general reemplaza la lista completa de `genreIds` si se
+  envía ese campo. Para "añadir un género sin tocar los demás" o "quitar
+  uno sin reemplazar la lista entera", hace falta un endpoint que opere
+  sobre un único elemento de la relación, no sobre el array completo.
+- Rutas con dos parámetros: `PATCH /books/:id/genres/:genreId` (añadir) y
+  `DELETE /books/:id/genres/:genreId` (quitar) — tratan el género como un
+  "sub-recurso" dentro del libro.
+
+**Manipular el array de una relación ya cargada en memoria**
+
+- `book.genres` es simplemente el campo de la entidad, ya resuelto en un
+  array de objetos `Genre` gracias a `relations: ['genres']` en el
+  `findOne` — se trabaja con él como con cualquier array de JavaScript.
+- `.some(condición)` → devuelve `true`/`false`: si solo hace falta saber
+  si un elemento existe, sin usarlo para nada más, es la herramienta más
+  directa (comunica mejor la intención que otras opciones).
+- `.find(condición)` → devuelve el **elemento** que cumple la condición
+  (o `undefined`). Tiene sentido usarlo en vez de `.some()` cuando sí se
+  va a aprovechar ese objeto después (por ejemplo, para incluir su
+  `name` en un mensaje de error), no solo para comprobar su existencia.
+- `.findIndex(condición)` → devuelve la **posición** del elemento que
+  cumple la condición (o `-1`). Es el que hace falta antes de poder
+  borrar un elemento concreto de un array.
+- `.splice(posición, cantidad)` → elimina `cantidad` elementos del array
+  a partir de esa posición, modificándolo directamente (no crea un array
+  nuevo). Es la forma estándar en JavaScript de quitar un elemento
+  concreto sabiendo su índice.
+- Tras modificar el array en memoria (`push`, `splice`...), `save(book)`
+  persiste el cambio: TypeORM detecta la diferencia respecto a lo que
+  había antes y actualiza la tabla intermedia en consecuencia (inserta o
+  borra la fila correspondiente), sin que haga falta tocarla a mano.
+
 ## Pendiente
 
-- Endpoints específicos `POST`/`DELETE /books/:id/genres/:genreId` para
-  añadir o quitar un género individual sin reemplazar la lista completa.
 - Posible ampliación futura: modo alternativo de borrado en cascada
   explícito para `Author` (no como comportamiento por defecto).
 - Posible ampliación futura: entidad `Loan` (préstamos) — con quién y

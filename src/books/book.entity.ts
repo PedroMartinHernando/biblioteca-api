@@ -14,7 +14,7 @@ export class Book {
     @ManyToOne(() => Author, (author) => author.books)
     author: Author;
 
-    @ManyToMany(() => Genre, (genre) => genre.books)
+    @ManyToMany(() => Genre, (genre) => genre.books,  { onDelete: 'CASCADE' })
     @JoinTable()
     genres: Genre[];
     
