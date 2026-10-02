@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Author } from './author.entity';
@@ -12,6 +12,7 @@ export class AuthorsService {
         @InjectRepository(Author) private authorsRepository: Repository<Author>,
         @InjectRepository(Book) private bookRepository: Repository<Book>
     ) {}
+    private readonly logger = new Logger(AuthorsService.name);
 
     async create(createAuthorDto: CreateAuthorDto): Promise <Author> {
         const author = this.authorsRepository.create({name: createAuthorDto.name});
@@ -49,5 +50,22 @@ export class AuthorsService {
         if(result.affected === 0){
             throw new NotFoundException(`Author with id ${id} not found`);
         }
+    }
+
+    async deleteAuthorAndBooks(id:number): Promise<void> {
+        const author = await this.authorsRepository.findOne({where: {id}});
+        if(!author){
+            throw new NotFoundException(`Author with id ${id} not found`);
+        }
+
+        const books = await this.bookRepository.findBy({author: {id}});
+        
+        for(const book of books){
+            await this.bookRepository.delete(book.id);
+            this.logger.log(`Deleted book ${book.title} by ${author.name}`);
+        }
+        
+        await this.authorsRepository.delete(id);
+        this.logger.log(`Deleted author ${author.name}`);
     }
 }

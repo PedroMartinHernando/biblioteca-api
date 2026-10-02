@@ -241,10 +241,77 @@ clave foránea**
   había antes y actualiza la tabla intermedia en consecuencia (inserta o
   borra la fila correspondiente), sin que haga falta tocarla a mano.
 
+## Sesión 6 — Borrado en cascada manual y depuración de rutas
+
+**Recorrer una relación para borrar en cadena**
+
+- Para borrar un autor junto con todos sus libros, dos variantes válidas
+  según si hace falta la lista de elementos borrados o no:
+  - `for (const book of books) { await this.bookRepository.delete(book.id); }`
+    — más código, pero da acceso a cada elemento durante el proceso (útil
+    para loggear, por ejemplo).
+  - `await this.bookRepository.delete({ author: { id } })` — una sola
+    instrucción SQL, más corta, pero no informa de cuáles ni cuántos
+    elementos se borraron.
+- Orden importante: borrar primero los libros, luego el autor — al revés
+  dejaría libros huérfanos apuntando a un autor que ya no existe.
+
+**Logger de Nest en vez de `console.log`**
+
+- `private readonly logger = new Logger(NombreDeLaClase.name);` como
+  propiedad de la clase, y `this.logger.log(mensaje)` donde haga falta.
+- Da formato consistente con el resto de logs de Nest (incluye el nombre
+  de la clase de origen automáticamente), frente a un `console.log` suelto
+  sin ese contexto.
+- Si una operación dentro del bucle lanza una excepción, el log de esa
+  iteración concreta nunca llega a ejecutarse — por eso el registro
+  resultante solo refleja lo que realmente se completó, no lo que se
+  intentó.
+
+**Transacciones: qué resuelven y por qué no hicieron falta aquí**
+
+- Varias escrituras en secuencia (borrar varios libros + el autor) pueden
+  fallar a mitad de camino, dejando un estado intermedio no deseado (parte
+  borrado, parte no) sin que nadie lo pidiera así.
+- Una transacción agrupa esas operaciones como todo-o-nada: `commit` si
+  todo sale bien, `rollback` (deshace todo) si algo falla a mitad de
+  proceso. Se gestiona con un `QueryRunner` de TypeORM, usando
+  `queryRunner.manager` en vez de los repositories normales dentro de un
+  `try/catch/finally`.
+- Para este proyecto (SQLite local, volumen de datos pequeño, sin
+  escritura concurrente real) el riesgo de un fallo a medias es
+  prácticamente nulo, así que no se implementó — pero es la herramienta a
+  usar cuando la consistencia de varias escrituras relacionadas sí importa
+  de verdad (por ejemplo, mover dinero entre dos cuentas).
+
+**Depurar una ruta que da 404 aunque el código "parezca" correcto**
+
+- Un `404` con el formato `"Cannot DELETE /ruta"` (en vez del mensaje
+  personalizado de un `NotFoundException`) significa que **ninguna ruta
+  de la aplicación coincide** — el controlador nunca llega a ejecutarse.
+- El log de arranque de Nest lista todas las rutas registradas
+  (`[RouterExplorer] Mapped {/ruta, MÉTODO} route`). Si la ruta esperada
+  no aparece ahí, el método con ese decorador no se cargó — frecuentemente
+  porque el fichero tiene cambios sin guardar en el editor, no por un
+  error de lógica o de configuración.
+- Reiniciar el servidor no sirve de nada si el fichero en disco no
+  refleja los cambios — hay que confirmar primero que se guardó de
+  verdad (indicador de cambios sin guardar en la pestaña del editor, y
+  que la terminal del servidor muestre "File change detected" al guardar).
+- El `Logger` de Nest escribe en la consola del servidor, no en la
+  respuesta HTTP — comprobar "qué devuelve el curl" y "qué se registró en
+  el log" son dos verificaciones distintas e independientes.
+
+**Nombrar una ruta destructiva de forma explícita**
+
+- Para una operación que borra más de lo que su nombre genérico sugeriría
+  (`DELETE /authors/:id` ya existe con comportamiento seguro), una ruta
+  distinta y explícita (`DELETE /authors/:id/cascade`) dentro de la misma
+  clase, declarada en cualquier orden respecto a `:id` — Nest/Express
+  distinguen bien ambos patrones por tener distinto número de segmentos.
+
 ## Pendiente
 
-- Posible ampliación futura: modo alternativo de borrado en cascada
-  explícito para `Author` (no como comportamiento por defecto).
 - Posible ampliación futura: entidad `Loan` (préstamos) — con quién y
   cuándo se prestó un libro.
 - Proyecto aparte de práctica de SQL puro (sin ORM), para entender mejor

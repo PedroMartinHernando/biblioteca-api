@@ -29,4 +29,10 @@ export class AuthorsController {
     remove(@Param('id') id:number): Promise<void> {
         return this.authorsService.remove(Number(id));
     }
+
+    @Delete(':id/cascade')
+    @HttpCode(204)
+    deleteAuthorAndBooks(@Param('id') id:number): Promise<void> {
+        return this.authorsService.deleteAuthorAndBooks(Number(id));
+    }
 }
