@@ -4,7 +4,6 @@ import { CreateGenreDto } from './dto/create-genre.dto';
 import { Repository } from 'typeorm';
 import { Genre } from './genre.entity';
 import { UpdateGenreDto } from '../genres/dto/update-genre.dto';
-import { throwError } from 'rxjs';
 
 @Injectable()
 export class GenresService {
