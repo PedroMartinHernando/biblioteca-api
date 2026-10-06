@@ -12,4 +12,7 @@ export class Borrower {
 
   @OneToMany(() => Loan, (loan) => loan.borrower)
   loans: Loan[];
+
+  @Column({ default:true })
+  active: boolean
 }

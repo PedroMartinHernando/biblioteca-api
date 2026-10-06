@@ -1,6 +1,7 @@
-import { Controller, Body, Post, Get } from '@nestjs/common';
+import { Controller, Body, Post, Get, Patch, Param } from '@nestjs/common';
 import { CreateBorrowerDto } from './dto/create-borrower.dto';
 import { BorrowersService } from './borrowers.service';
+import { Borrower } from './borrower.entity'
 
 @Controller('borrowers')
 export class BorrowersController {
@@ -16,5 +17,15 @@ export class BorrowersController {
     @Get()
     findAll(){
         return this.borrowersService.findAll();
+    }
+
+    @Patch(':id/deactivate')
+    deactivate(@Param('id') id:number): Promise<Borrower> {
+        return this.borrowersService.deactivate(Number(id));
+    }
+
+    @Patch(':id/reactivate')
+    reactivate(@Param('id') id:number): Promise<Borrower> {
+        return this.borrowersService.reactivate(Number(id));
     }
 }
