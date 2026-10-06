@@ -5,6 +5,7 @@ import { Repository, IsNull } from 'typeorm';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { Book } from '../books/book.entity';
 import { Borrower } from '../borrowers/borrower.entity';
+import { ReturnDateDto } from './dto/return-date.dto';
 
 @Injectable()
 export class LoansService {
@@ -50,5 +51,19 @@ export class LoansService {
         return this.loansRepository.find({
             relations: ['book', 'borrower']
         })
+    }
+
+    async returnBook(id: number, returnDateDto: ReturnDateDto): Promise<Loan> {
+        const activeLoan = await this.loansRepository.findOneBy({ id: id });
+        if(!activeLoan) {
+            throw new NotFoundException(`Loan with id ${id} doesn't exist.`);
+        }
+        if(activeLoan?.returnDate !== null){
+            throw new ConflictException(`Loan with id ${id} was already returned on ${activeLoan?.returnDate}`)
+        }
+        
+        await this.loansRepository.update(id, {returnDate: returnDateDto.returnDate});
+ 
+        return (await this.loansRepository.findOneBy({ id: id }))!;
     }
 }
