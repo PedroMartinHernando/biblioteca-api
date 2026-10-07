@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Patch, Post, Param} from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Param, Query} from '@nestjs/common';
 import { LoansService } from './loans.service';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { ReturnDateDto } from './dto/return-date.dto';
+import { FindLoansDto } from './dto/find-loans.dto';
 
 @Controller('loans')
 export class LoansController {
@@ -15,12 +16,13 @@ export class LoansController {
     }
 
     @Get()
-    findAll(){
-        return this.loansService.findAll();
+    findAll(@Query() query: FindLoansDto){
+        return this.loansService.findAll(query);
     }
 
     @Patch('/:id/return')
     returnBook(@Param('id') id: number, @Body()returnDateDto: ReturnDateDto ){
         return this.loansService.returnBook(Number(id), returnDateDto)
     }
+    
 }

@@ -1,11 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Loan } from './loan.entity';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, FindOptionsWhere, Not } from 'typeorm';
 import { CreateLoanDto } from './dto/create-loan.dto';
 import { Book } from '../books/book.entity';
 import { Borrower } from '../borrowers/borrower.entity';
 import { ReturnDateDto } from './dto/return-date.dto';
+import { FindLoansDto } from './dto/find-loans.dto';
 
 @Injectable()
 export class LoansService {
@@ -47,9 +48,22 @@ export class LoansService {
         return this.loansRepository.save(loan);
     }
 
-    async findAll(): Promise<Loan[]> {
+    async findAll(filters: FindLoansDto): Promise<Loan[]> {
+        const where: FindOptionsWhere<Loan> = {}
+        if(filters.bookId !== undefined) {
+            where.book = { id: filters.bookId }
+        }
+        if(filters.borrowerId !== undefined) {
+            where.borrower = { id: filters.borrowerId }
+        }
+        if(filters.status === 'open') {
+            where.returnDate = IsNull();
+        } else if (filters.status === 'closed') {
+            where.returnDate = Not(IsNull());
+        }
+
         return this.loansRepository.find({
-            relations: ['book', 'borrower']
+            where, relations: ['book', 'borrower']
         })
     }
 
